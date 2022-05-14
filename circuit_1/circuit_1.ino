@@ -1,6 +1,6 @@
-#include<LiquidCrystal.h>
+ #include<LiquidCrystal.h>
 #include <SoftwareSerial.h>
-SoftwareSerial SIM900L(10,11); // GSM MODULE
+SoftwareSerial SIM900L(10,11);
 LiquidCrystal lcd(7,6,5,4,3,2);
 
 #define buzzer 12
@@ -10,20 +10,23 @@ LiquidCrystal lcd(7,6,5,4,3,2);
 #define y A1
 #define z A2
 
-int xsample=0;
-int ysample=0;
-int zsample=0;
+long xsample=0;
+long ysample=0;
+long zsample=0;
 
 #define samples 50
 #define maxVal 20
 #define minVal -20
 #define buzTime 5000
 
+
+long initial_x, initial_y;
+
 void setup()
 {
   lcd.begin(16,2);
   Serial.begin(9600);
-  SIM900L.begin(115200); // GSM SETUP
+  SIM900L.begin(115200);
   delay(1000);
   lcd.print("EarthQuake ");
   lcd.print("Detector    ");
@@ -35,7 +38,10 @@ void setup()
   pinMode(buzzer, OUTPUT);
   pinMode(led, OUTPUT);
 
-  alert();
+//  alert();
+
+  initial_x = analogRead(x);
+  initial_y = analogRead(y);
   
   for(int i=0;i<samples;i++)
   {
@@ -59,8 +65,21 @@ void setup()
   lcd.print(" X     Y     Z     ");
 }
 
+bool shaking = false, earthquake_occur = false;
+String intensity;
 void loop()
 {
+  if(shaking) {
+    Serial.println("Shaking detected \n Intensity "+ intensity);
+//    alert();
+  } else {
+    Serial.println("Steady...");
+    if(earthquake_occur) {
+//      delay(5000); // will set sending message delay.
+//      sendMessage();
+    }
+  }
+  
   float value1=analogRead(x);
   float value2=analogRead(y);
   float value3=analogRead(z);
@@ -69,6 +88,24 @@ void loop()
   float yValue=ysample-value2;
   float zValue=zsample-value3;
 
+  int timeInMillis;
+  float velocity_x, velocity_y, indicator = 45.352;
+  /*
+    0 & -1 is the intial state of detected by sensor.
+  */ 
+  indicator = computeVelocity(value1, initial_x);
+  if(indicator < 0) indicator = indicator * -1;
+  Serial.println(indicator, 5);
+  if(indicator > 0.03) {
+      shaking = true;
+      earthquake_occur = true;
+   
+      velocity_x = computeVelocity(xValue, initial_x);
+      detectIntensity(indicator, velocity_y);
+  } else {
+    shaking = false;
+  }
+  
   lcd.setCursor(0,1);
   lcd.print(xValue);
   lcd.setCursor(6,1);
@@ -76,38 +113,24 @@ void loop()
   lcd.setCursor(12,1);
   lcd.print(zValue);
   delay(1000);
-
-//  Serial.println(xValue);
-//  Serial.println(sqrt(analogRead(x) * analogRead(x) + analogRead(y) * analogRead(y)));
-//  Serial.println(xValue);
-  detectIntensity(sqrt(xValue * xValue + yValue * yValue + zValue * zValue)/32);
-  GsmStatus();
 }
 
-void detectIntensity(float convertedValue){
-  Serial.println(convertedValue);
-  if (convertedValue < 2.5 && convertedValue > 0.8){
-    alert();
-    sendMessage("I", true);  
-  } else if (convertedValue < 8 && convertedValue > 2.5){
-    alert();
-    sendMessage("II", true);
-  } else if (convertedValue < 25 && convertedValue > 8){
-    alert();
-    sendMessage("III", true);
-  } else if (convertedValue < 80 && convertedValue > 25){
-    alert();
-    sendMessage("IV", true);
-  } else if (convertedValue < 250 && convertedValue > 80){
-    alert();
-    sendMessage("V", true);
-  } else if (convertedValue < 400 && convertedValue > 250){
-    alert();
-    sendMessage("VI", true);
-  } else if (convertedValue > 400){
-    alert();
-    sendMessage("VII", true);
-  }
+float computeVelocity(float n, float initial) {
+  float computed_x;
+  int timeInMillis;
+  timeInMillis = 1000;
+  computed_x = (n - initial) / 67.584;
+  return computed_x * timeInMillis * 0.001;
+}
+
+void detectIntensity(float x, float y){
+  if (x < 0.03) intensity = "IV";
+  else if (x < 0.04) intensity = "V";
+  else if (x < 0.92)  intensity = "VI";
+  else if (x < 0.18 && x > 0.092) intensity = "VII";
+  else if (x < 0.34 && x > 0.18) intensity = "VII"; 
+  else if (x < 0.65 && x > 0.34) intensity = "IX";
+  else if (x > 0.65) intensity = "X";
 }
 
 void GsmStatus(){
@@ -115,19 +138,23 @@ void GsmStatus(){
    Serial.write(SIM900L.read());
 }
 
-void sendMessage(String intensity, bool during){
-  Serial.println ("Intensity " + intensity);
-  Serial.println ("Sending Message please wait....");
+void sendMessage() {
+  Serial.println("Intensity " + intensity);
   SIM900L.println("AT+CMGF=1");
   delay(1000);
   SIM900L.println("AT+CMGS=\"+639216286417\"\r");
-  delay(3000);
+  delay(3000); 
+  Serial.println(intensity);
   
-  if(during) SIM900L.println("WARNING - Earthquake alert! \n \nIntensity " + intensity + " \n \nExpect *light/heavy* shaking. Damages and aftershocks are expected. Duck, cover, and hold!"); 
-  else SIM900L.println("After");
+  if(intensity == "V") SIM900L.println("WARNING - Shaking has stopped! \n \nA Intensity " + intensity + " earthquake has occurred. People are now advised to exit the building safely. Aftershocks are still expected."); 
+  else if (intensity == "VI") SIM900L.println("WARNING - Shaking has stopped! \n \nA Intensity " + intensity + " earthquake has occurred. Aftershocks are still expected. People are advised to stay in their respective evacuation areas until further instructions. Stay alert!"); 
   
   delay(3000);
   SIM900L.println((char)26);
+  delay(3000);
+  Serial.print("Message sent");
+  intensity = " ";
+  earthquake_occur = false;
 }
 
 void alert(){
