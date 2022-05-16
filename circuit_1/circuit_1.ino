@@ -1,4 +1,4 @@
- #include<LiquidCrystal.h>
+#include<LiquidCrystal.h>
 #include <SoftwareSerial.h>
 SoftwareSerial SIM900L(10,11);
 LiquidCrystal lcd(7,6,5,4,3,2);
@@ -18,7 +18,6 @@ long zsample=0;
 #define maxVal 20
 #define minVal -20
 #define buzTime 5000
-
 
 long initial_x, initial_y;
 
@@ -67,16 +66,25 @@ void setup()
 
 bool shaking = false, earthquake_occur = false;
 String intensity;
+
+//char *arrayString[] = {"9216286417", "9201386387", "9984056306", "9669745640", "9162863111", "9056054246", "9084915409", "9166240508", "9994585533", "9989230570", "9304149708", "9451540860", "9274106855", "9517158009", "9777406205", "9159360532", "9667286011", "9983990006", "9516764492", "9636626940"};
 void loop()
 {
+//  for(int i = 0; i < sizeof(arrayString)/sizeof(arrayString[0]); i++){
+//    sendMessage(arrayString[i]);  
+//  }
+//  Serial.println(sizeof(arrayString)/sizeof(arrayString[0]));
   if(shaking) {
     Serial.println("Shaking detected \n Intensity "+ intensity);
 //    alert();
   } else {
+//    sizeof(arrayString)/sizeof(arrayString[0])
     Serial.println("Steady...");
     if(earthquake_occur) {
-//      delay(5000); // will set sending message delay.
-//      sendMessage();
+      delay(5000); // will set sending message delay.
+      sendMessage();
+      delay(50000);
+      earthquake_occur = false;
     }
   }
   
@@ -124,12 +132,13 @@ float computeVelocity(float n, float initial) {
 }
 
 void detectIntensity(float x, float y){
-  if (x < 0.03) intensity = "IV";
-  else if (x < 0.04) intensity = "V";
-  else if (x < 0.92)  intensity = "VI";
-  else if (x < 0.18 && x > 0.092) intensity = "VII";
-  else if (x < 0.34 && x > 0.18) intensity = "VII"; 
-  else if (x < 0.65 && x > 0.34) intensity = "IX";
+  Serial.println("Value: "+ String(x));
+  if (x <= 0.03) intensity = "IV";
+  else if (x <= 0.04) intensity = "V";
+  else if (x <= 0.09)  intensity = "VI";
+  else if (x <= 0.18) intensity = "VII";
+  else if (x <= 0.34) intensity = "VIII"; 
+  else if (x <= 0.65) intensity = "IX";
   else if (x > 0.65) intensity = "X";
 }
 
@@ -138,23 +147,24 @@ void GsmStatus(){
    Serial.write(SIM900L.read());
 }
 
+// sizeof(arrayString)/sizeof(arrayString[0])
+String personnel = "9216286417";
 void sendMessage() {
-  Serial.println("Intensity " + intensity);
-  SIM900L.println("AT+CMGF=1");
-  delay(1000);
-  SIM900L.println("AT+CMGS=\"+639216286417\"\r");
-  delay(3000); 
-  Serial.println(intensity);
-  
-  if(intensity == "V") SIM900L.println("WARNING - Shaking has stopped! \n \nA Intensity " + intensity + " earthquake has occurred. People are now advised to exit the building safely. Aftershocks are still expected."); 
-  else if (intensity == "VI") SIM900L.println("WARNING - Shaking has stopped! \n \nA Intensity " + intensity + " earthquake has occurred. Aftershocks are still expected. People are advised to stay in their respective evacuation areas until further instructions. Stay alert!"); 
-  
-  delay(3000);
-  SIM900L.println((char)26);
-  delay(3000);
-  Serial.print("Message sent");
-  intensity = " ";
-  earthquake_occur = false;
+  for(int i = 0; i < sizeof(arrayString)/sizeof(arrayString[0]); i++){
+    SIM900L.println("AT+CMGF=1");
+    delay(1000);
+    SIM900L.println("AT+CMGS=\"+63"+String(arrayString[i])+"\"\r");
+    delay(3000);
+    SIM900L.println("TEST " + intensity);
+//    SIM900L.println("WARNING - Shaking has stopped! \n \nAn intensity " + intensity + " earthquake has occurred. People are now advised to exit the building safely. Aftershocks are still expected.");
+//    if(intensity == "V") SIM900L.println("WARNING - Shaking has stopped! \n \nA Intensity " + intensity + " earthquake has occurred. People are now advised to exit the building safely. Aftershocks are still expected."); 
+//    else if (intensity == "VI") SIM900L.println("WARNING - Shaking has stopped! \n \nA Intensity " + intensity + " earthquake has occurred. Aftershocks are still expected. People are advised to exit the building safely. Aftershocks are still expected"); 
+//    else if(intensity == "VII" || intensity == "VIII" || intensity == "XI" || intensity == "X") SIM900L.println("WARNING - Shaking has stopped! \n \nA Intensity " + intensity + " earthquake has occurred. Aftershocks are still expected. People are advised to stay in their respective evacuation areas until further instructions. Stay alert!"); 
+    delay(3000);
+    SIM900L.println((char)26);
+    delay(3000);
+    Serial.println("Message sent");
+  }
 }
 
 void alert(){
